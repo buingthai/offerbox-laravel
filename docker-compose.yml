@@ -1,0 +1,194 @@
+version: '3.7'
+services:
+    nginx:
+        build: ./docker/nginx
+        container_name: nginx
+        volumes:
+            - .:/var/www/offerbox
+        networks:
+            iplug_network:
+                ipv4_address: 172.29.0.9
+
+    php:
+        build: ./docker/php
+        container_name: php
+        privileged: true
+        extra_hosts:
+            # wkhtmltopdfでlocal.offerbox.jpを見えるように
+            - "local.offerbox.jp:172.29.0.9"
+        environment:
+            ON_DOCKER: 1
+            MYSQL_HOST: 172.29.0.2
+            MYSQL_BEFORE_LOGIN_HOST: mysql_before_login
+            LOCALSTACK_HOST: 172.29.0.8
+            REDIS_HOST: 172.29.0.7
+            MEMCACHED_HOST: 172.29.0.6
+            FLUENTD_HOST: 172.29.0.3
+            # FUEL_ENV: ${ENV}
+            # SMTP_USERNAME: ${SMTP_USERNAME}
+            # SMTP_PASSWORD: ${SMTP_PASSWORD}
+            FUEL_ENV: local
+            SMTP_USERNAME: firstname.lastname@i-plug.co.jp
+            SMTP_PASSWORD: password
+            MYSQL_PORT_3306_TCP_ADDR: mysql
+            MYSQL_PORT_3306_TCP_PORT: 3306
+            UNITTEST_MYSQL_ROOT_PASSWORD: rara6y
+            UNITTEST_MYSQL_ROOT_USER: root
+            REDIS_PORT_6379_TCP_ADDR: redis
+            MEMCACHED_PORT_11211_TCP_ADDR: memcached
+        links:
+            - mysql
+            - localstack
+        volumes:
+            - .:/var/www/offerbox
+            - ./share_module:/var/www/share_module
+        # hostname: ${HOSTNAME}
+        hostname: offerboxlocal
+        networks:
+            iplug_network:
+                ipv4_address: 172.29.0.5
+
+    localstack:
+        build: ./docker/localstack
+        container_name: localstack
+        environment:
+            - SERVICES=sqs,s3
+            - HOSTNAME_EXTERNAL=localstack
+        ports:
+            - "4566:4566"
+            - "8080:8080"
+        volumes:
+            - ./docker/localstack/init.d:/docker-entrypoint-initaws.d/
+        networks:
+            iplug_network:
+                ipv4_address: 172.29.0.8
+
+    redis:
+        build: ./docker/redis
+        container_name: redis
+        ports:
+            - "6379:6379"
+        volumes:
+            - redis-data:/var/lib/redis/
+        networks:
+            iplug_network:
+                ipv4_address: 172.29.0.7
+
+    memcached:
+        build: ./docker/memcached
+        container_name: memcached
+        ports:
+            - "11211:11211"
+        networks:
+            iplug_network:
+                ipv4_address: 172.29.0.6
+
+    mysql:
+        build: ./docker/mysql
+        container_name: mysql
+        ports:
+            - "3306:3306"
+        environment:
+            MYSQL_ROOT_PASSWORD: rara6y
+            MYSQL_MACK_DATA_FOR_LOCAL: local
+            MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+            MYSQL_DATABASE: offerboxdev
+            MYSQL_USER: offerboxdev
+            MYSQL_PASSWORD: Jxru3miL9r
+        volumes:
+            - mysql-data:/var/lib/mysql
+            - ./docker/mysql/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+        networks:
+            iplug_network:
+                ipv4_address: 172.29.0.2
+
+    fluentd:
+        build: ./docker/fluentd
+        container_name: fluentd
+        ports:
+            - "24224:24224"
+        links:
+            - localstack
+        environment:
+            - 'FLUENTD_CONF=fluent.conf'
+            - AWS_KEY_ID=dummy
+            - AWS_SEC_KEY=dummy
+        networks:
+            iplug_network:
+                ipv4_address: 172.29.0.3
+
+    v2_nginx:
+        build:
+            context: .
+            dockerfile: ./docker/v2_nginx/Dockerfile
+        container_name: v2_nginx
+        volumes:
+            - ./offerbox-v2:/var/www/offerbox-v2
+            - ./public:/var/www/public
+        environment:
+            # INIT: ${INIT}
+            INIT: "true"
+            APP_ENV: local
+            APPHOST: 172.29.0.101
+            DOLLAR: $$
+            OFFICE_IP: 113.38.5.42
+        networks:
+            iplug_network:
+                ipv4_address: 172.29.0.100
+        # depends_on:
+        #     - v2_fluentd
+        # logging:
+        #     driver: "fluentd"
+        #     options:
+        #         fluentd-address: "localhost:24225"
+        #         tag: "v2_nginx-firelens-1234567890"
+
+    v2_php:
+        build:
+            context: .
+            dockerfile: ./docker/v2_php/Dockerfile
+        container_name: v2_php
+        volumes:
+            - ./offerbox-v2:/var/www/offerbox-v2
+            - ./share_module:/var/www/share_module
+        environment:
+            APP_ENV: local
+            # INIT: ${INIT}
+            INIT: "true"
+        networks:
+            iplug_network:
+                ipv4_address: 172.29.0.101
+        # depends_on:
+        #     - v2_fluentd
+        # logging:
+        #     driver: "fluentd"
+        #     options:
+        #         fluentd-address: "localhost:24225"
+        #         tag: "v2_php-firelens-1234567890"
+
+    # ログ検証用。ローカルからサーバーに向ける場合、以下とfluentd
+    # v2_fluentd:
+    #     build:
+    #         context: .
+    #         dockerfile: ./docker/v2_fluentd/Dockerfile
+    #     container_name: v2_fluentd
+    #     ports:
+    #         - "24225:24224"
+    #         - "24225:24224/udp"
+    #     environment:
+    #         HOST_LOG01: 54.64.53.152
+    #         HOST_LOG02: 54.64.53.152
+    #     networks:
+    #         iplug_network:
+    #             ipv4_address: 172.29.0.102
+
+volumes:
+    mysql-data:
+        driver: local
+    redis-data:
+        driver: local
+
+
+networks:
+    iplug_network:
+        external: true

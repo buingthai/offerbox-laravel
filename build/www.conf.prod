@@ -1,0 +1,17 @@
+[www]
+listen = 127.0.0.1:9000
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0666
+pm = static
+pm.max_children = 10
+user = www-data
+group = www-data
+pm.max_requests = 500
+pm.status_path = /phpfpm_status
+security.limit_extensions = .php
+request_terminate_timeout = 120s
+
+env[DD_ENV] = 'prod'
+env[DD_SERVICE] = 'offerbox-v2'
+env[DD_SERVICE_MAPPING] = 'pdo:offerbox-v2-pdo,mysqli:offerbox-v2-mysqli,phpredis:offerbox-v2-phpredis,memcached:offerbox-v2-memcached,curl:offerbox-v2-curl,guzzle:offerbox-v2-guzzle'
